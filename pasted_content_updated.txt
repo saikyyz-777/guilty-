@@ -1,0 +1,816 @@
+pcall(function()
+    local Players = game:GetService("Players")
+    local UIS = game:GetService("UserInputService")
+    local TweenService = game:GetService("TweenService")
+    local HttpService = game:GetService("HttpService")
+    local VirtualUser = game:GetService("VirtualUser")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local SoundService = game:GetService("SoundService")
+    local ContentProvider = game:GetService("ContentProvider")
+    local Debris = game:GetService("Debris")
+    local LP = Players.LocalPlayer
+
+    local guiParent = game:GetService("CoreGui")
+    pcall(function()
+        if gethui then guiParent = gethui() end
+    end)
+
+    pcall(function()
+        for _, p in ipairs({game:GetService("CoreGui"), guiParent}) do
+            local old = p:FindFirstChild("SnoopyHub")
+            if old then old:Destroy() end
+        end
+    end)
+
+    local C = {
+        white = Color3.fromRGB(255, 255, 255),
+        black = Color3.fromRGB(28, 28, 30),
+        charcoal = Color3.fromRGB(58, 58, 64),
+        dark = Color3.fromRGB(70, 70, 76),
+        yellow = Color3.fromRGB(255, 215, 0),
+        cream = Color3.fromRGB(255, 244, 190),
+        gray = Color3.fromRGB(240, 240, 244),
+        green = Color3.fromRGB(80, 200, 120),
+        red = Color3.fromRGB(220, 60, 60),
+        text = Color3.fromRGB(30, 30, 30),
+    }
+
+    local CONFIG_FILE = "SnoopyHub_Config.json"
+    local saved = {}
+    local states = {}
+
+    pcall(function()
+        if isfile and readfile and isfile(CONFIG_FILE) then
+            local data = HttpService:JSONDecode(readfile(CONFIG_FILE))
+            if type(data) == "table" then saved = data end
+        end
+    end)
+
+    local function saveConfig()
+        pcall(function()
+            if writefile then
+                writefile(CONFIG_FILE, HttpService:JSONEncode(states))
+            end
+        end)
+    end
+
+    local running = true
+    local soundOn = saved.Sound ~= false
+    states.Sound = soundOn
+
+    local soundCandidates = {
+        click = {"6895079853", "12221967", "421058925", "12222242"},
+        whoosh = {"5153954203", "6927468309"},
+        level = {"271111328", "9120386436"},
+    }
+    local resolved = {}
+
+    task.spawn(function()
+        pcall(function()
+            for kind, ids in pairs(soundCandidates) do
+                for _, id in ipairs(ids) do
+                    pcall(function()
+                        local s = Instance.new("Sound")
+                        s.SoundId = "rbxassetid://" .. id
+                        s.Volume = 0.45
+                        s.Parent = SoundService
+                        ContentProvider:PreloadAsync({s})
+                        if s.IsLoaded and s.TimeLength > 0 then
+                            resolved[kind] = s
+                        else
+                            s:Destroy()
+                        end
+                    end)
+                    if resolved[kind] then break end
+                end
+            end
+        end)
+    end)
+
+    local function play(kind, speed)
+        pcall(function()
+            if not soundOn then return end
+            local s = resolved[kind]
+            if not s then return end
+            local c = s:Clone()
+            c.PlaybackSpeed = speed or 1
+            c.Parent = SoundService
+            c:Play()
+            Debris:AddItem(c, 3)
+        end)
+    end
+
+    local function new(class, props, parent)
+        local o = Instance.new(class)
+        for k, v in pairs(props) do o[k] = v end
+        o.Parent = parent
+        return o
+    end
+
+    local function corner(o, r)
+        new("UICorner", {CornerRadius = UDim.new(0, r)}, o)
+    end
+
+    local function tween(obj, info, goal)
+        local ok, t = pcall(function()
+            local tw = TweenService:Create(obj, info, goal)
+            tw:Play()
+            return tw
+        end)
+        return ok and t or nil
+    end
+
+    local tweens = {}
+
+    local function wiggle(obj, on, power, speed)
+        pcall(function()
+            if tweens[obj] then tweens[obj]:Cancel(); tweens[obj] = nil end
+            if on then
+                obj.Rotation = -(power or 14)
+                tweens[obj] = tween(obj, TweenInfo.new(speed or 0.35, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Rotation = power or 14})
+            else
+                tween(obj, TweenInfo.new(0.2), {Rotation = 0})
+            end
+        end)
+    end
+
+    local function bob(obj, dx, dy, speed)
+        pcall(function()
+            local base = obj.Position
+            tween(obj, TweenInfo.new(speed or 0.9, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Position = base + UDim2.new(0, dx, 0, dy)})
+        end)
+    end
+
+    local function emoji(text, size, pos, parent)
+        return new("TextLabel", {
+            Size = UDim2.new(0, size + 6, 0, size + 6),
+            Position = pos,
+            BackgroundTransparency = 1,
+            Text = text,
+            TextSize = size,
+            Font = Enum.Font.GothamBold,
+            TextColor3 = C.white,
+        }, parent)
+    end
+
+    local gui = new("ScreenGui", {Name = "SnoopyHub", ResetOnSpawn = false, IgnoreGuiInset = true, ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 100}, guiParent)
+
+    local FULL = UDim2.new(0, 250, 0, 310)
+
+    local main = new("Frame", {
+        Size = FULL,
+        Position = UDim2.new(0.5, -125, 0.5, -155),
+        BackgroundColor3 = C.white,
+        BorderSizePixel = 0,
+        ClipsDescendants = true,
+    }, gui)
+    corner(main, 12)
+    new("UIStroke", {Color = C.black, Thickness = 2}, main)
+    local mainScale = new("UIScale", {Scale = 0.7}, main)
+
+    local titleBar = new("Frame", {Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = C.black, BorderSizePixel = 0, ZIndex = 3}, main)
+    corner(titleBar, 12)
+    new("UIGradient", {Color = ColorSequence.new(C.black, C.charcoal), Rotation = 0}, titleBar)
+
+    local stripe = new("Frame", {Size = UDim2.new(1, 0, 0, 3), Position = UDim2.new(0, 0, 1, -3), BackgroundColor3 = C.yellow, BorderSizePixel = 0, ZIndex = 3}, titleBar)
+    local stripeGrad = new("UIGradient", {
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, C.yellow),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 250, 190)),
+            ColorSequenceKeypoint.new(1, C.yellow),
+        }),
+        Offset = Vector2.new(-1, 0),
+    }, stripe)
+    tween(stripeGrad, TweenInfo.new(1.6, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1, false), {Offset = Vector2.new(1, 0)})
+
+    local titleDog = emoji("🐶", 18, UDim2.new(0, 6, 0, 6), titleBar)
+    titleDog.ZIndex = 4
+    wiggle(titleDog, true, 12, 0.5)
+
+    new("TextLabel", {
+        Size = UDim2.new(0, 118, 1, -3),
+        Position = UDim2.new(0, 34, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "Made By Lxnny",
+        Font = Enum.Font.GothamBlack,
+        TextSize = 14,
+        TextColor3 = C.white,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 4,
+    }, titleBar)
+
+    local titleBird = emoji("🐤", 16, UDim2.new(0, 122, 0, 8), titleBar)
+    titleBird.ZIndex = 4
+    bob(titleBird, 0, -4, 0.5)
+
+    local function titleButton(text, xOff, bg, fg, size)
+        local b = new("TextButton", {
+            Size = UDim2.new(0, 24, 0, 24),
+            Position = UDim2.new(1, xOff, 0, 6),
+            BackgroundColor3 = bg,
+            Text = text,
+            Font = Enum.Font.GothamBold,
+            TextSize = size,
+            TextColor3 = fg,
+            BorderSizePixel = 0,
+            ZIndex = 4,
+            AutoButtonColor = false,
+        }, titleBar)
+        corner(b, 7)
+        local sc = new("UIScale", {Scale = 1}, b)
+        b.MouseEnter:Connect(function() tween(sc, TweenInfo.new(0.12), {Scale = 1.12}) end)
+        b.MouseLeave:Connect(function() tween(sc, TweenInfo.new(0.12), {Scale = 1}) end)
+        b.MouseButton1Down:Connect(function() tween(sc, TweenInfo.new(0.08), {Scale = 0.88}) end)
+        b.MouseButton1Up:Connect(function() tween(sc, TweenInfo.new(0.12, Enum.EasingStyle.Back), {Scale = 1}) end)
+        return b
+    end
+
+    local soundBtn = titleButton(soundOn and "🔊" or "🔇", -82, C.charcoal, C.white, 12)
+    local minBtn = titleButton("—", -56, C.yellow, C.black, 14)
+    local closeBtn = titleButton("✕", -30, C.red, C.white, 12)
+
+    local body = new("Frame", {Size = UDim2.new(1, 0, 1, -38), Position = UDim2.new(0, 0, 0, 38), BackgroundColor3 = C.white, BorderSizePixel = 0}, main)
+
+    local pawXs = {0.1, 0.45, 0.78}
+    local pawTimes = {5, 7.5, 9.5}
+    for i, x in ipairs(pawXs) do
+        local paw = new("TextLabel", {
+            Size = UDim2.new(0, 20, 0, 20),
+            Position = UDim2.new(x, 0, 1, 0),
+            BackgroundTransparency = 1,
+            Text = "🐾",
+            TextSize = 14,
+            TextTransparency = 0.8,
+            ZIndex = 0,
+        }, body)
+        task.delay(i * 0.9, function()
+            tween(paw, TweenInfo.new(pawTimes[i], Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1, false), {Position = UDim2.new(x, 0, 0, -20), Rotation = 25})
+        end)
+    end
+
+    local list = new("Frame", {Size = UDim2.new(1, -16, 1, -48), Position = UDim2.new(0, 8, 0, 8), BackgroundTransparency = 1}, body)
+    new("UIListLayout", {Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder}, list)
+
+    local stats = new("TextLabel", {
+        Size = UDim2.new(1, 0, 0, 22),
+        BackgroundColor3 = C.cream,
+        Text = "🪙 0  •  🏗️ 0  •  🔄 0",
+        Font = Enum.Font.GothamBold,
+        TextSize = 12,
+        TextColor3 = C.text,
+        BorderSizePixel = 0,
+        LayoutOrder = 1,
+    }, list)
+    corner(stats, 7)
+    new("UIStroke", {Color = C.yellow, Thickness = 1.5}, stats)
+
+    local coinCount, touchCount, rebirthCount = 0, 0, 0
+    local statsDirty = false
+    local function updateStats()
+        statsDirty = true
+    end
+
+    task.spawn(function()
+        while running do
+            task.wait(0.12)
+            if statsDirty then
+                statsDirty = false
+                pcall(function()
+                    stats.Text = "🪙 " .. coinCount .. "  •  🏗️ " .. touchCount .. "  •  🔄 " .. rebirthCount
+                end)
+            end
+        end
+    end)
+
+    local status = new("TextLabel", {
+        Size = UDim2.new(1, 0, 0, 18),
+        BackgroundTransparency = 1,
+        Text = "● Ready",
+        Font = Enum.Font.GothamMedium,
+        TextSize = 11,
+        TextColor3 = C.dark,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        LayoutOrder = 20,
+    }, list)
+
+    local function setStatus(text, color)
+        status.Text = "● " .. text
+        status.TextColor3 = color or C.dark
+        pcall(function()
+            status.TextTransparency = 0.6
+            tween(status, TweenInfo.new(0.25), {TextTransparency = 0})
+        end)
+    end
+
+    local applies = {}
+
+    local function makeToggle(order, key, icon, text, onChange)
+        local card = new("Frame", {Size = UDim2.new(1, 0, 0, 38), BackgroundColor3 = C.gray, BorderSizePixel = 0, LayoutOrder = order}, list)
+        corner(card, 9)
+        local stroke = new("UIStroke", {Color = C.gray, Thickness = 2}, card)
+        local cs = new("UIScale", {Scale = 0}, card)
+
+        local ico = emoji(icon, 18, UDim2.new(0, 6, 0.5, -12), card)
+        new("TextLabel", {
+            Size = UDim2.new(1, -92, 1, 0),
+            Position = UDim2.new(0, 34, 0, 0),
+            BackgroundTransparency = 1,
+            Text = text,
+            Font = Enum.Font.GothamBold,
+            TextSize = 13,
+            TextColor3 = C.text,
+            TextXAlignment = Enum.TextXAlignment.Left,
+        }, card)
+
+        local bg = new("Frame", {Size = UDim2.new(0, 40, 0, 20), Position = UDim2.new(1, -48, 0.5, -10), BackgroundColor3 = C.dark, BorderSizePixel = 0}, card)
+        corner(bg, 10)
+        local knob = new("Frame", {Size = UDim2.new(0, 14, 0, 14), Position = UDim2.new(0, 3, 0.5, -7), BackgroundColor3 = C.white, BorderSizePixel = 0}, bg)
+        corner(knob, 7)
+        local btn = new("TextButton", {Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1, Text = ""}, card)
+
+        task.delay(0.2 + (order - 2) * 0.09, function()
+            tween(cs, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1})
+        end)
+
+        btn.MouseButton1Down:Connect(function() tween(cs, TweenInfo.new(0.08), {Scale = 0.95}) end)
+        btn.MouseButton1Up:Connect(function() tween(cs, TweenInfo.new(0.18, Enum.EasingStyle.Back), {Scale = 1}) end)
+        btn.MouseLeave:Connect(function() tween(cs, TweenInfo.new(0.12), {Scale = 1}) end)
+
+        states[key] = false
+
+        local function apply(v, skipSave)
+            pcall(function()
+                states[key] = v
+                tween(knob, TweenInfo.new(0.22, Enum.EasingStyle.Back), {Position = v and UDim2.new(1, -17, 0.5, -7) or UDim2.new(0, 3, 0.5, -7)})
+                tween(bg, TweenInfo.new(0.2), {BackgroundColor3 = v and C.green or C.dark})
+                tween(card, TweenInfo.new(0.25), {BackgroundColor3 = v and C.cream or C.gray})
+                tween(stroke, TweenInfo.new(0.2), {Color = v and C.yellow or C.gray})
+                wiggle(ico, v, 16, 0.3)
+                onChange(v)
+            end)
+            if not skipSave then saveConfig() end
+        end
+
+        btn.MouseButton1Click:Connect(function()
+            local v = not states[key]
+            play("click", v and 1.2 or 0.85)
+            apply(v)
+        end)
+        applies[key] = apply
+    end
+
+    local function fireTouch(part)
+        pcall(function()
+            local char = LP.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if not hrp or not part or not part.Parent then return end
+            firetouchinterest(hrp, part, 0)
+            firetouchinterest(hrp, part, 1)
+        end)
+    end
+
+    local autoCoinEnabled = false
+    local coinQueue = {}
+    local processingCoins = false
+    local coinConnection = nil
+
+    local function processCoinQueue()
+        if processingCoins then return end
+        processingCoins = true
+        while #coinQueue > 0 and autoCoinEnabled and running do
+            pcall(function()
+                local coin = table.remove(coinQueue, 1)
+                if coin and coin.Parent and coin:IsA("BasePart") then
+                    fireTouch(coin)
+                    coinCount += 1
+                    updateStats()
+                end
+            end)
+            task.wait(0.15)
+        end
+        processingCoins = false
+    end
+
+    makeToggle(2, "AutoCoins", "🪙", "AutoCoins", function(v)
+        autoCoinEnabled = v
+        if v then
+            local container = workspace:FindFirstChild("CashRushCoins")
+            if container then
+                coinQueue = {}
+                for _, child in ipairs(container:GetChildren()) do
+                    if child:IsA("BasePart") then table.insert(coinQueue, child) end
+                end
+                task.spawn(processCoinQueue)
+                if coinConnection then coinConnection:Disconnect() end
+                coinConnection = container.ChildAdded:Connect(function(coin)
+                    if coin:IsA("BasePart") then
+                        table.insert(coinQueue, coin)
+                        task.spawn(processCoinQueue)
+                    end
+                end)
+                setStatus("Collecting coins", C.green)
+            else
+                setStatus("Coins not found", C.red)
+            end
+        else
+            if coinConnection then coinConnection:Disconnect(); coinConnection = nil end
+            coinQueue = {}
+            setStatus("Coins off")
+        end
+    end)
+
+    local function getMyTycoon()
+        local folder = workspace:FindFirstChild("Tycoon")
+        if not folder then return nil end
+        for _, t in ipairs(folder:GetChildren()) do
+            local props = t:FindFirstChild("Properties")
+            local owner = props and props:FindFirstChild("Owner")
+            if owner then
+                if owner:IsA("StringValue") and (owner.Value == LP.Name or owner.Value == LP.DisplayName) then
+                    return t
+                elseif owner:IsA("ObjectValue") and owner.Value == LP then
+                    return t
+                end
+            end
+        end
+        return nil
+    end
+
+    local autoCollectorEnabled = false
+
+    local function cashCollectorLoop()
+        while autoCollectorEnabled and running do
+            pcall(function()
+                local myTycoon = getMyTycoon()
+                if myTycoon then
+                    local things = myTycoon:FindFirstChild("tycoonThings")
+                    local collectorParts = things and things:FindFirstChild("CollectorParts")
+                    local cashCollector = collectorParts and collectorParts:FindFirstChild("cashCollector")
+                    local collectCash = cashCollector and cashCollector:FindFirstChild("CollectCash")
+                    if collectCash then fireTouch(collectCash) end
+                end
+            end)
+            task.wait(0.2)
+        end
+    end
+
+    makeToggle(3, "AutoCollector", "💵", "AutoCollector", function(v)
+        autoCollectorEnabled = v
+        if v then
+            task.spawn(cashCollectorLoop)
+            setStatus("Collecting cash", C.green)
+        else
+            setStatus("Collector off")
+        end
+    end)
+
+    local paidKeywords = {"product", "gamepass", "robux", "passid", "devproduct"}
+    local paidCache = setmetatable({}, {__mode = "k"})
+    local freeCache = setmetatable({}, {__mode = "k"})
+
+    local function hasPaidWord(str)
+        str = string.lower(str)
+        for _, k in ipairs(paidKeywords) do
+            if string.find(str, k, 1, true) then return true end
+        end
+        return false
+    end
+
+    local function checkInstance(inst)
+        if hasPaidWord(inst.Name) then return true end
+        for attr, value in pairs(inst:GetAttributes()) do
+            if hasPaidWord(attr) then return true end
+            if type(value) == "string" and hasPaidWord(value) then return true end
+        end
+        if inst:IsA("StringValue") and hasPaidWord(inst.Value) then return true end
+        if inst:IsA("TextLabel") or inst:IsA("TextButton") then
+            local t = string.lower(inst.Text)
+            if string.find(t, "robux", 1, true) or string.find(t, "r$", 1, true) or string.find(inst.Text, "\u{E002}", 1, true) then
+                return true
+            end
+        end
+        return false
+    end
+
+    local function isPaidButton(button)
+        if paidCache[button] then return true end
+
+        local settings = button:FindFirstChild("buttonSettings") or button:FindFirstChild("ButtonSettings")
+        if settings and (settings:FindFirstChild("Product") or settings:FindFirstChild("Gamepass")) then
+            paidCache[button] = true
+            return true
+        end
+
+        local checkedAt = freeCache[button]
+        if checkedAt and os.clock() - checkedAt < 10 then return false end
+
+        local found = checkInstance(button)
+        if not found then
+            for _, d in ipairs(button:GetDescendants()) do
+                if checkInstance(d) then found = true; break end
+            end
+        end
+
+        if found then
+            paidCache[button] = true
+        else
+            freeCache[button] = os.clock()
+        end
+        return found
+    end
+
+    local autoTycoonEnabled = false
+
+    local function canAffordUpgrade(button)
+        local leaderstats = LP:FindFirstChild("leaderstats")
+        local cash = leaderstats and leaderstats:FindFirstChild("Cash")
+        local settings = button and (button:FindFirstChild("buttonSettings") or button:FindFirstChild("ButtonSettings"))
+        local price = settings and settings:FindFirstChild("Price")
+
+        if not cash or not price then return false end
+
+        local cashValue = tonumber(cash.Value)
+        local priceValue = tonumber(price.Value)
+        if not cashValue or not priceValue then return false end
+
+        -- Só permite o touchinterest quando o jogador tem Cash suficiente.
+        return cashValue >= priceValue
+    end
+
+    local function autoTycoonLoop()
+        while autoTycoonEnabled and running do
+            pcall(function()
+                local myTycoon = getMyTycoon()
+                local buttonsFolder = myTycoon and myTycoon:FindFirstChild("Buttons")
+                if buttonsFolder then
+                    for _, button in ipairs(buttonsFolder:GetChildren()) do
+                        if not autoTycoonEnabled or not running then break end
+                        local head = button:FindFirstChild("Head")
+                        if head and not isPaidButton(button) and canAffordUpgrade(button) then
+                            fireTouch(head)
+                            touchCount += 1
+                            updateStats()
+                            task.wait(0.03)
+                        end
+                    end
+                end
+            end)
+            task.wait(0.03)
+        end
+    end
+
+    makeToggle(4, "AutoTycoon", "🏗️", "AutoTycoon", function(v)
+        autoTycoonEnabled = v
+        if v then
+            task.spawn(autoTycoonLoop)
+            setStatus("Buying upgrades (no Robux)", C.green)
+        else
+            setStatus("Tycoon off")
+        end
+    end)
+
+    local autoRebirthEnabled = false
+
+    local function autoRebirthLoop()
+        local remote
+        while autoRebirthEnabled and running do
+            pcall(function()
+                if not remote or not remote.Parent then
+                    local folder = ReplicatedStorage:FindFirstChild("remoteEvents")
+                    remote = folder and folder:FindFirstChild("doRebirth")
+                end
+                if remote then
+                    remote:FireServer()
+                    rebirthCount += 1
+                    updateStats()
+                end
+            end)
+            task.wait(0.25)
+        end
+    end
+
+    makeToggle(5, "AutoRebirth", "🔄", "AutoRebirth", function(v)
+        autoRebirthEnabled = v
+        if v then
+            task.spawn(autoRebirthLoop)
+            setStatus("Rebirthing", C.green)
+        else
+            setStatus("Rebirth off")
+        end
+    end)
+
+    local function checkTycoonFree(tycoon)
+        local things = tycoon:FindFirstChild("tycoonThings")
+        if not things then return false end
+        local door = things:FindFirstChild("tycoonDoor")
+        if not door then return false end
+        local doorText = door:FindFirstChild("doorText", true)
+        return doorText ~= nil and string.find(doorText.Text, "Touch To Claim") ~= nil
+    end
+
+    local function tryTeleportToFreeTycoon()
+        local char = LP.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local tycoonFolder = workspace:FindFirstChild("Tycoon")
+        if not hrp or not tycoonFolder then return false end
+
+        for _, tycoon in ipairs(tycoonFolder:GetChildren()) do
+            if checkTycoonFree(tycoon) then
+                local things = tycoon:FindFirstChild("tycoonThings")
+                local door = things and things:FindFirstChild("tycoonDoor")
+                if door then
+                    local targetPos
+                    if door:IsA("BasePart") then
+                        targetPos = door.Position
+                    elseif door:IsA("Model") then
+                        local ok, pivot = pcall(function() return door:GetPivot().Position end)
+                        if ok then targetPos = pivot end
+                    end
+                    if targetPos then
+                        hrp.CFrame = CFrame.new(targetPos + Vector3.new(0, 5, 0))
+                        return true
+                    end
+                end
+            end
+        end
+        return false
+    end
+
+    local scene = new("Frame", {Size = UDim2.new(1, 0, 0, 38), Position = UDim2.new(0, 0, 1, -38), BackgroundColor3 = C.cream, BorderSizePixel = 0, ClipsDescendants = true}, body)
+    new("Frame", {Size = UDim2.new(1, 0, 0, 2), BackgroundColor3 = C.yellow, BorderSizePixel = 0}, scene)
+
+    local star1 = emoji("⭐", 11, UDim2.new(0.14, 0, 0, 4), scene)
+    local star2 = emoji("⭐", 9, UDim2.new(0.6, 0, 0, 8), scene)
+    for i, s in ipairs({star1, star2}) do
+        tween(s, TweenInfo.new(0.7 + i * 0.3, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {TextTransparency = 0.8})
+        wiggle(s, true, 20, 0.8 + i * 0.2)
+    end
+
+    local house = emoji("🏠", 22, UDim2.new(1, -36, 0, 3), scene)
+    bob(house, 0, -1, 1.1)
+    local dog = emoji("🐕", 18, UDim2.new(0, 8, 0, 6), scene)
+    bob(dog, 0, -3, 0.45)
+
+    local flyBird = emoji("🐤", 14, UDim2.new(0.22, 0, 0, 12), scene)
+    tween(flyBird, TweenInfo.new(2.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Position = UDim2.new(0.62, 0, 0, 6)})
+    wiggle(flyBird, true, 10, 0.25)
+
+    local trail = emoji("✨", 9, UDim2.new(0.18, 0, 0, 14), scene)
+    tween(trail, TweenInfo.new(2.4, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Position = UDim2.new(0.58, 0, 0, 8), TextTransparency = 0.7})
+
+    new("TextLabel", {
+        Size = UDim2.new(1, 0, 0, 12),
+        Position = UDim2.new(0, 0, 1, -13),
+        BackgroundTransparency = 1,
+        Text = "Made By Lxnny",
+        Font = Enum.Font.GothamMedium,
+        TextSize = 9,
+        TextColor3 = C.dark,
+    }, scene)
+
+    local pill = new("Frame", {
+        Size = UDim2.new(0, 170, 0, 34),
+        Position = UDim2.new(0.5, -85, 0, 8),
+        BackgroundColor3 = C.black,
+        BorderSizePixel = 0,
+        Visible = false,
+    }, gui)
+    corner(pill, 17)
+    local pillStroke = new("UIStroke", {Color = C.yellow, Thickness = 2}, pill)
+    tween(pillStroke, TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut, -1, true), {Thickness = 4})
+    local pillGrad = new("UIGradient", {Color = ColorSequence.new(C.black, C.charcoal), Rotation = 0}, pill)
+    tween(pillGrad, TweenInfo.new(4, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1, false), {Rotation = 360})
+    local pillScale = new("UIScale", {Scale = 1}, pill)
+
+    local pillDog = emoji("🐶", 18, UDim2.new(0, 8, 0.5, -12), pill)
+    wiggle(pillDog, true, 12, 0.5)
+    new("TextLabel", {
+        Size = UDim2.new(1, -76, 1, 0),
+        Position = UDim2.new(0, 36, 0, 0),
+        BackgroundTransparency = 1,
+        Text = "Made By Lxnny",
+        Font = Enum.Font.GothamBlack,
+        TextSize = 14,
+        TextColor3 = C.yellow,
+    }, pill)
+    local pillBird = emoji("🐤", 16, UDim2.new(1, -32, 0.5, -11), pill)
+    bob(pillBird, 0, -3, 0.5)
+
+    local function makeDraggable(handle, target, onTap)
+        local dragging, dragStart, startPos, moved
+        handle.InputBegan:Connect(function(input)
+            pcall(function()
+                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                    dragging = true
+                    moved = false
+                    dragStart = input.Position
+                    startPos = target.Position
+                    input.Changed:Connect(function()
+                        if input.UserInputState == Enum.UserInputState.End then
+                            dragging = false
+                            if onTap and not moved then pcall(onTap) end
+                        end
+                    end)
+                end
+            end)
+        end)
+        UIS.InputChanged:Connect(function(input)
+            pcall(function()
+                if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                    local delta = input.Position - dragStart
+                    if delta.Magnitude > 6 then moved = true end
+                    target.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+                end
+            end)
+        end)
+    end
+
+    local function openHub()
+        pill.Visible = false
+        mainScale.Scale = 0.7
+        main.Visible = true
+        play("whoosh", 1.1)
+        tween(mainScale, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1})
+    end
+
+    local function minimizeHub()
+        play("whoosh", 0.85)
+        local t = tween(mainScale, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Scale = 0.6})
+        if t then t.Completed:Wait() end
+        main.Visible = false
+        pill.Position = UDim2.new(0.5, -85, 0, 8)
+        pillScale.Scale = 0.5
+        pill.Visible = true
+        tween(pillScale, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1})
+    end
+
+    makeDraggable(titleBar, main)
+    makeDraggable(pill, pill, openHub)
+
+    minBtn.MouseButton1Click:Connect(function()
+        play("click")
+        pcall(minimizeHub)
+    end)
+
+    soundBtn.MouseButton1Click:Connect(function()
+        soundOn = not soundOn
+        states.Sound = soundOn
+        soundBtn.Text = soundOn and "🔊" or "🔇"
+        saveConfig()
+        play("click", 1.1)
+    end)
+
+    local idledConnection = LP.Idled:Connect(function()
+        pcall(function()
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new(0, 0))
+        end)
+    end)
+
+    task.spawn(function()
+        while running do
+            task.wait(55)
+            pcall(function()
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton2(Vector2.new(0, 0))
+            end)
+        end
+    end)
+
+    closeBtn.MouseButton1Click:Connect(function()
+        pcall(function()
+            play("click", 0.8)
+            running = false
+            autoCoinEnabled = false
+            autoCollectorEnabled = false
+            autoTycoonEnabled = false
+            autoRebirthEnabled = false
+            if coinConnection then coinConnection:Disconnect() end
+            if idledConnection then idledConnection:Disconnect() end
+            tween(mainScale, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {Scale = 0})
+            task.wait(0.22)
+            gui:Destroy()
+            for _, s in pairs(resolved) do pcall(function() s:Destroy() end) end
+        end)
+    end)
+
+    tween(mainScale, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Scale = 1})
+
+    task.spawn(function()
+        pcall(function()
+            if not LP.Character then LP.CharacterAdded:Wait(); task.wait(1) end
+            if tryTeleportToFreeTycoon() then
+                setStatus("Teleported to a free tycoon", C.green)
+                play("level")
+            else
+                setStatus("No free tycoon found", C.red)
+            end
+        end)
+    end)
+
+    for key, apply in pairs(applies) do
+        if saved[key] == true then
+            apply(true, true)
+        end
+    end
+end)
